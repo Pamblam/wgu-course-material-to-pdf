@@ -1,71 +1,50 @@
+import 'dotenv/config';
 import puppeteer from 'puppeteer';
 import { prompt } from './modules/prompt.js';
+import { wgu_login } from './modules/login.js';
+import { load_course } from './modules/load_course.js';
 import fs from 'fs';
 import { PDFDocument } from 'pdf-lib';
+import { title } from 'process';
 
-// Set to false if you want to see the browser actions.
-const headless = true;
 
-const browser = await puppeteer.launch({headless});
+const debug_mode = process.env.DEBUG_MODE?.toLowerCase() === 'true';
+
+const browser = await puppeteer.launch({headless: !debug_mode});
 const page = await browser.newPage();
 
-// Login to WGU
-await page.goto('https://my.wgu.edu/');
-await page.waitForSelector('#login-username');
+try {
+	await wgu_login(page);
+	if(debug_mode) console.log("Login successful.");
+} catch (error) {
+	console.error(error);
+	await browser.close();
+	process.exit(1);
+}
 
-let username = await prompt("Enter your WGU Username: ");
-const username_input = await page.$('#login-username');
-await username_input.type(username, {delay: 100});
+let course_title;
+try {
+	course_title = await load_course(page);
+	if(debug_mode) console.log("Course loaded successfully.");
+} catch (error) {
+	console.error(error);
+	await browser.close();
+	process.exit(1);
+}
 
-let password = await prompt("Enter your WGU Password: ");
-const password_input = await page.$('#login-password');
-await password_input.type(password, {delay: 100});
+console.log('Loading course material...');
 
-const login_button = await page.$('#signOnButton');
-await login_button.click();
-
-// Assumes no MFA Setup.. may need to handle that in the future.
-await page.waitForNavigation();
-await page.waitForSelector('div.setup-mfa #skipMfa');
-
-const skip_mfa_button = await page.$('div.setup-mfa #skipMfa');
-await skip_mfa_button.click();
-
-// Get list of active courses
-await page.waitForNavigation();
-await page.waitForSelector('li.home-course');
-
-let titles = await page.evaluate(() => {
-	const courseItems = [...document.querySelectorAll('li.home-course')];
-	return courseItems.map(item => {
-		let title = item.querySelector('.margin--right--10.text--bold').innerText.trim();
-		return title;
-	});
+// Load the course material page
+let material_url = await page.evaluate(() => {
+	return document.querySelector('.mdc-button__label>.learning-btn').href;
 });
 
-console.log(`Which course do you want to convert to PDF?`);
-for(let i=0; i<titles.length; i++){
-	console.log(` ${i+1}) ${titles[i]}`);
-}
-let n = await prompt("Enter the number of the course: ");
+console.log('material_url', material_url);
 
-const courseButtons = await page.$$('wgu-submit-button');
-const course_button = courseButtons[n - 1];
-const course_title = titles[n - 1];
-
-if (!course_button) throw new Error(`No course button found for selection ${n}`);
-
-const [newPage] = await Promise.all([
-	browser.waitForTarget(t => t.opener() === page.target()).then(t => t.page()),
-	course_button.click()
+await Promise.all([
+	page.goto(material_url),
+	page.waitForNavigation()
 ]);
-
-await newPage.waitForNavigation();
-await newPage.waitForSelector(`.mdc-button__label>.learning-btn`);
-
-const course_material_btn = await newPage.$('.mdc-button__label>.learning-btn');
-
-await course_material_btn.click();
 
 await new Promise(r => setTimeout(r, 5000));
 
@@ -94,6 +73,8 @@ let files = [];
 while(true){
 	cnt++;
 	
+	console.log(`Processing page ${cnt}...`);
+
 	await materialPage.waitForSelector('.next-button');
 	await new Promise(r => setTimeout(r, 3000));
 	const next_btn = await materialPage.$('.next-button');
