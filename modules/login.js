@@ -29,9 +29,14 @@ export async function wgu_login(page){
 	const firstResolved = await Promise.race([
 		page.waitForSelector('div.setup-mfa #skipMfa').then(() => 'mfa-skip'),
 		page.waitForSelector('.tile-button__title').then(() => 'mfa-tile'),
+		page.waitForSelector('a[href*="courses/course"]').then(() => 'already-loggedin'),
 	]);
 
 	switch (firstResolved) {
+		case 'already-loggedin':
+			console.log("Already logged in.");
+			return;
+
 		case 'mfa-skip':
 			const skip_mfa_button = await page.$('div.setup-mfa #skipMfa');
 			await skip_mfa_button.click();

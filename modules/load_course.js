@@ -26,8 +26,10 @@ export async function load_course(page) {
 		n = await prompt("Enter the number of the course: ");
 	}
 
+	await new Promise(resolve => setTimeout(resolve, 3000));
+
 	let course_url = await page.evaluate((index) => {
-		return document.querySelectorAll('wgu-submit-button')[index].parentElement.href;
+		return [...document.querySelectorAll('a')].map(a=>a.href).filter(href=>/courses\/course/.test(href))[index];
 	}, n-1);
 
 	await Promise.all([
