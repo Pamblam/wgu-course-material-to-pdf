@@ -79,7 +79,37 @@ while(true){
 	await new Promise(r => setTimeout(r, 3000));
 	const next_btn = await materialPage.$('.next-button');
 
-	await materialPage.pdf({ path: `page_${cnt}.pdf`, format: 'A4' });
+	await materialPage.emulateMediaType('print');
+	await materialPage.addStyleTag({ content: `
+		.sequence-container > div:first-child { display: none !important; }
+		footer, .text-right.small.py-1 { display: none !important; }
+		.sequence { min-height: 0 !important; }
+		* {
+			page-break-before: avoid !important;
+			page-break-after: avoid !important;
+			page-break-inside: avoid !important;
+			break-before: avoid !important;
+			break-after: avoid !important;
+			break-inside: avoid !important;
+		}
+	` });
+	await materialPage.evaluate(() => document.fonts && document.fonts.ready);
+	await new Promise(r => setTimeout(r, 300));
+	const contentHeight = await materialPage.evaluate(() => {
+		return Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+	});
+
+	await materialPage.addStyleTag({ content: `
+		@page { size: 816px ${contentHeight + 40}px; margin: 0 !important; }
+	` });
+
+	await materialPage.pdf({
+		path: `page_${cnt}.pdf`,
+		width: '816px',
+		height: `${contentHeight + 40}px`,
+		printBackground: true,
+		margin: { top: 0, right: 0, bottom: 0, left: 0 }
+	});
 	files.push(`page_${cnt}.pdf`);
 
 	const isDisabled = await next_btn.evaluate((btn) => btn.hasAttribute('disabled'));
