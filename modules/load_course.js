@@ -1,3 +1,5 @@
+import { prompt } from './prompt.js';
+
 export async function load_course(page) {
 	let url = await page.url();
 	if(!url.includes('my.wgu.edu/home')){
